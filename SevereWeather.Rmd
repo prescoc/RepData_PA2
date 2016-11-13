@@ -1,0 +1,135 @@
+---
+title: "Economic and Human Cost of Severe Weather Events"
+author: "Scott Cogswell"
+date: "13 November 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Synopsis
+
+This paper explores the effects of severe weather events in the United States.
+In particular, we examine the economic (monetary) cast and the human cost (in fatalities and injuries)
+of severe weather using data from the National Oceanic and Atmospheric Administration (NOAA).
+We find that 
+
+
+# Data Processing
+
+We use the publicly available Storm Data report file provided by NOAA.
+This is a comma separated file which indicates the state or region and county, 
+begin and end time, the event type, the numbers of fatalaties and injuries, 
+the amount of property damage, the amount of crop damage, and the precise location.
+
+
+```{r Load Data, cache=TRUE}
+url.StormData <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+bz2.StormData <- basename(url.StormData)
+if (file.exists(bz2.StormData)) {
+  cat("Using file downloaded at", format(file.info(bz2.StormData)$mtime, "%Y-%m-%d %H:%M:%S"))
+} else {
+  download.file(url.StormData, (bz2.StormData))
+}
+stormData <- read.csv(bz2.StormData)
+```
+
+The file contains 902,297 distinct observations, it may take some time to load.
+
+## Data Coverage
+
+Our storm data file covers a wide variety of events, from 1950 through 2011, 
+throughout the United States and territories.
+The regions covered are
+
+* All 50 states
+* Washington DC
+* Puerto Rico
+* Guam
+* American Samoa
+* US Virgin Islands
+
+The following oceans and inland waterways are also covered:
+
+* The Great Lakes
+* The St. Lawrence River
+* Pacific Ocean
+* Atlantic Ocean
+* Gulf of Alaska
+* Gulf of Mexico
+* Caribbean Sea and Tropical Atlantic
+
+Events are recorded for their possibility of causing 
+
+* loss of life
+* injury 
+* damage to property or crops or loss of commerce
+
+Rare and unusual weather and other significant meteorological events 
+such as record maximum and minimum temperatures are also recorded.
+
+## Damage scale conventions
+
+Property damage is recorded in two fields: the first field contains up to
+three significant figures, and the second contains the exponent.
+PROPDMG and PROPDMGEXP indicate the amount of property damage, while
+CROPDMG and CROPDMGEXP indicate the amount of crop damage.
+We combine property and crop damage in this analysis.
+
+For example PROPDMG = 25.0 and PROPDMGEXP = M indicates $25 million of property damage.
+To assist analysis, we convert the values into numbers by multiplying 
+the original values according to the exponent.
+The function used is:
+
+```{r DamageScale}
+ExpVal <- function(exponent) {
+  # Convert an exponent into a value to scale the damage estimate
+  # Valid exponents (case insensitive) are H, K, M, and B,
+  # other values receive a scale of 1.
+  # Damage estimate is this value times the DMG field value.
+  
+   switch(toupper(exponent),
+          H=100, K=1000, M=1000000, B=1000000000, 1)
+}
+```
+
+A very small proportion of the PROPDMGEXP and CROPDMGEXP values do not fit the 
+documented standard:
+
+```{r EXPvalues}
+table(stormData$PROPDMGEXP)
+table(stormData$PROPDMGEXP[stormData$PROPDMGEXP!=""]) / sum(stormData$PROPDMGEXP!="") * 100
+
+table(stormData$CROPDMGEXP)
+table(stormData$CROPDMGEXP[stormData$CROPDMGEXP!=""]) / sum(stormData$CROPDMGEXP!="") * 100
+```
+
+Over half of the observations have an empty PROPDMGEXP value, 
+over 97% of the remaining value are 'K', 2.6% are 'M' or 'm', 
+there are 40 'B', six 'H' and one 'h'. 
+Fewer than 0.1% of the observations have PROPDMGEXP or CROPDMGEXP which we are unable to interpret,
+these are left with a scale of 1.
+
+```{r ConvertValues}
+stormData$Damage <- stormData$PROPDMG * sapply(stormData$PROPDMGEXP, ExpVal) +
+                    stormData$CROPDMG * sapply(stormData$CROPDMGEXP, ExpVal)
+```
+
+## Injuries and Fataluties
+
+Injuries and fatalaties are recorded for each event, values are zero or a positive number.
+NOAA has instructions about recording injuries and fatalities that are caused directly by
+the event, and those that are indirectly caused by the event. 
+For example, wind blows a tree onto a road onto a passing car killing the driver: this is a direct fatality.
+Another car strikes thee same fallen tree some time later: any injuries or fatalities are indirect.
+
+## Recording Events
+
+The event type (EVTYPE) field in the input file is not well standardized.
+For example, there 216 distinct EVTYPE values containing "WIND", including
+"THUNDERSTORM WINDS53", "THUNDERSTORM WINDSS", "THUNDERSTORMS WIND", "THUNDERSTORMS WINDS",
+"THUNDERSTORMW WINDS", "THUNDERSTORMWINDS", "THUNDERSTROM WIND", "THUNDERSTROM WINDS",
+"THUNDERSTORM WINDS", "THUNDERTORM WINDS", "THUNDERTSORM WIND", "THUNDESTORM WINDS", and "THUNERSTORM WINDS".
+In this analysis we make no effort to combine these.
