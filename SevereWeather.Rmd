@@ -44,8 +44,8 @@ Our storm data file covers a wide variety of events, from 1950 through 2011,
 throughout the United States and territories.
 The regions covered are
 
-* All 50 states
-* Washington DC
+* All 50 US states
+* Washington, DC
 * Puerto Rico
 * Guam
 * American Samoa
@@ -96,7 +96,8 @@ ExpVal <- function(exponent) {
 ```
 
 A very small proportion of the PROPDMGEXP and CROPDMGEXP values do not fit the 
-documented standard:
+documented standard of 'K' for thousands, 'M' for millions, and 'B' for billions of dollars.
+We assume that 'H' is for hundreds of dollars.
 
 ```{r EXPvalues}
 table(stormData$PROPDMGEXP)
@@ -117,19 +118,72 @@ stormData$Damage <- stormData$PROPDMG * sapply(stormData$PROPDMGEXP, ExpVal) +
                     stormData$CROPDMG * sapply(stormData$CROPDMGEXP, ExpVal)
 ```
 
-## Injuries and Fataluties
+## Injuries and Fatalities
 
 Injuries and fatalaties are recorded for each event, values are zero or a positive number.
 NOAA has instructions about recording injuries and fatalities that are caused directly by
 the event, and those that are indirectly caused by the event. 
 For example, wind blows a tree onto a road onto a passing car killing the driver: this is a direct fatality.
-Another car strikes thee same fallen tree some time later: any injuries or fatalities are indirect.
+Another car strikes thee same fallen tree some time later: 
+any injuries or fatalities from this incident are indirect.
 
 ## Recording Events
 
-The event type (EVTYPE) field in the input file is not well standardized.
-For example, there 216 distinct EVTYPE values containing "WIND", including
-"THUNDERSTORM WINDS53", "THUNDERSTORM WINDSS", "THUNDERSTORMS WIND", "THUNDERSTORMS WINDS",
-"THUNDERSTORMW WINDS", "THUNDERSTORMWINDS", "THUNDERSTROM WIND", "THUNDERSTROM WINDS",
-"THUNDERSTORM WINDS", "THUNDERTORM WINDS", "THUNDERTSORM WIND", "THUNDESTORM WINDS", and "THUNERSTORM WINDS".
-In this analysis we make no effort to combine these.
+The event type is recorded in the EVTYPE field in the input file,
+but this field is not well standardized.
+There 985 distinct values in EVTYPE, 
+of which 216 distinct EVTYPE values contain "WIND"; these include
+"THUNDERSTORM WINDS53", "THUNDERSTORM WINDSS", 
+"THUNDERSTORMS WIND", "THUNDERSTORMS WINDS", "THUNDERSTORMW WINDS", "THUNDERSTORMWINDS", "THUNDERSTROM WIND",
+"THUNDERSTROM WINDS", "THUNDERTORM WINDS", "THUNDERTSORM WIND", "THUNDESTORM WINDS", and "THUNERSTORM WINDS" among others.
+In this analysis we make no effort to combine these beyond what is described below.
+
+# Results
+
+We consider the effects of severe weather events on human health, and in economic consequences
+as measured by property and crop damages.
+
+Our first step is to identify the events leading to the greatest effects,
+and given the imprecise event names, check that our results are
+robust to near matches.
+To do this we define a function to show the results of events sharing
+a common pattern or regular expression.
+
+```{r Analysis}
+evFatal <- sort(tapply(stormData$FATALITIES, stormData$EVTYPE, sum), decr=T)
+evFatal <- evFatal[evFatal > 0]   # only the event types with any fatalities
+evDamage <- sort(tapply(stormData$Damage, stormData$EVTYPE, sum), decr=T)
+evDamage <- evDamage[evDamage > 0]  # only event types with damage
+
+HowMany <- function(ev, ptn, ic=TRUE) {
+  vv <- ev[grep(ptn, names(ev), value=T, ignore.case=ic)]; 
+  show(vv); 
+  sum(vv)
+}
+```
+
+With function *HowMany* we can test whether, for example, Thunderstorms are
+under-represented in our initial list of fatality causes because fatalities are
+split across different categories.
+
+## Human health
+
+The most effect on human health is fatalities. 
+Figure 1 shows the fatality count for each
+```{r PlotFatalities}
+evFatal <- sort(tapply(stormData$FATALITIES, stormData$EVTYPE, sum), decr=T)
+evFatal <- evFatal[evFatal > 0]   # only the event types with any fatalities
+barplot(evFatal[1:10], main="Severe Event Fatalities")
+```
+
+Tornadoes appear to be the most significant cause of death by a large margin,
+but the ambiguous naming may affect these results as "HEAT" appears twice in
+the top ten.
+This also suggests that the 5,633 attributed to TORNADO may also be an understatement.
+We examine this possibility by 
+
+1. Define a function to 
+
+
+```
+## Property and crop damage
