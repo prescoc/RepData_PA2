@@ -12,10 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 # Synopsis
 
 This paper explores the effects of severe weather events in the United States.
-In particular, we examine the economic (monetary) cast and the human cost (in fatalities and injuries)
+In particular, we examine the human cost (in fatalities) and the economic cost 
+(in monetary damages to property and crops) 
 of severe weather using data from the National Oceanic and Atmospheric Administration (NOAA).
-We find that 
-
+We find that tornadoes are the most deadly severe weather phenomenon by a large margin,
+and that floods have caused the most damage.
 
 # Data Processing
 
@@ -34,6 +35,8 @@ if (file.exists(bz2.StormData)) {
   download.file(url.StormData, (bz2.StormData))
 }
 stormData <- read.csv(bz2.StormData)
+stormData[1, ]
+stormData[nrow(stormData), ]
 ```
 
 The file contains 902,297 distinct observations, it may take some time to load.
@@ -42,6 +45,10 @@ The file contains 902,297 distinct observations, it may take some time to load.
 
 Our storm data file covers a wide variety of events, from 1950 through 2011, 
 throughout the United States and territories.
+The first observation is a tornado at 01:30 CST on April 18, 1950 followed by 
+another tornado at 01:45 CST on the same day in another county in Alabama.
+The last observation is also in Alabama, at 08:00:00PM CST on November 28, 2011.
+
 The regions covered are
 
 * All 50 US states
@@ -53,7 +60,7 @@ The regions covered are
 
 The following oceans and inland waterways are also covered:
 
-* The Great Lakes
+* The Great Lakes (each separately)
 * The St. Lawrence River
 * Pacific Ocean
 * Atlantic Ocean
@@ -67,12 +74,14 @@ Events are recorded for their possibility of causing
 * injury 
 * damage to property or crops or loss of commerce
 
+In our analysis we focus on loss of life and property/crop damage.
+
 Rare and unusual weather and other significant meteorological events 
 such as record maximum and minimum temperatures are also recorded.
 
 ## Damage scale conventions
 
-Property damage is recorded in two fields: the first field contains up to
+Property damage values are recorded in two fields: the first field contains up to
 three significant figures, and the second contains the exponent.
 PROPDMG and PROPDMGEXP indicate the amount of property damage, while
 CROPDMG and CROPDMGEXP indicate the amount of crop damage.
@@ -97,21 +106,32 @@ ExpVal <- function(exponent) {
 
 A very small proportion of the PROPDMGEXP and CROPDMGEXP values do not fit the 
 documented standard of 'K' for thousands, 'M' for millions, and 'B' for billions of dollars.
-We assume that 'H' is for hundreds of dollars.
+We assume that 'H' is for hundreds of dollars, although given that the events of
+interest are in the tens to hundreds of billions of dollars of damage our findings
+are robust to this assumption.
 
-```{r EXPvalues}
+```{r PropertyEXPvalues}
 table(stormData$PROPDMGEXP)
+# percentage of non-blank observations
 table(stormData$PROPDMGEXP[stormData$PROPDMGEXP!=""]) / sum(stormData$PROPDMGEXP!="") * 100
-
-table(stormData$CROPDMGEXP)
-table(stormData$CROPDMGEXP[stormData$CROPDMGEXP!=""]) / sum(stormData$CROPDMGEXP!="") * 100
 ```
 
 Over half of the observations have an empty PROPDMGEXP value, 
 over 97% of the remaining value are 'K', 2.6% are 'M' or 'm', 
 there are 40 'B', six 'H' and one 'h'. 
+
+The crop data observations follow the published guidelines more closely.
+
+```{r CropEXPvalues}
+table(stormData$CROPDMGEXP)
+# percentage of non-blank observations 
+table(stormData$CROPDMGEXP[stormData$CROPDMGEXP!=""]) / sum(stormData$CROPDMGEXP!="") * 100
+```
+
 Fewer than 0.1% of the observations have PROPDMGEXP or CROPDMGEXP which we are unable to interpret,
 these are left with a scale of 1.
+
+We calculate the total damage as follows:
 
 ```{r ConvertValues}
 stormData$Damage <- stormData$PROPDMG * sapply(stormData$PROPDMGEXP, ExpVal) +
@@ -123,8 +143,8 @@ stormData$Damage <- stormData$PROPDMG * sapply(stormData$PROPDMGEXP, ExpVal) +
 Injuries and fatalaties are recorded for each event, values are zero or a positive number.
 NOAA has instructions about recording injuries and fatalities that are caused directly by
 the event, and those that are indirectly caused by the event. 
-For example, wind blows a tree onto a road onto a passing car killing the driver: this is a direct fatality.
-Another car strikes thee same fallen tree some time later: 
+For example, wind blows a tree next to a road onto a passing car killing the driver: this is a direct fatality.
+Another car strikes the same fallen tree some time later: 
 any injuries or fatalities from this incident are indirect.
 
 ## Recording Events
@@ -158,32 +178,94 @@ evDamage <- evDamage[evDamage > 0]  # only event types with damage
 HowMany <- function(ev, ptn, ic=TRUE) {
   vv <- ev[grep(ptn, names(ev), value=T, ignore.case=ic)]; 
   show(vv); 
-  sum(vv)
+  unlist(list(Total=sum(vv)))
 }
 ```
 
-With function *HowMany* we can test whether, for example, Thunderstorms are
+With function *HowMany* we can test whether, for example, thunderstorms are
 under-represented in our initial list of fatality causes because fatalities are
 split across different categories.
 
 ## Human health
 
-The most effect on human health is fatalities. 
-Figure 1 shows the fatality count for each
+We measure the effect on human health using fatalities. 
+Figure 1 shows the fatality count for each event type.
+
 ```{r PlotFatalities}
 evFatal <- sort(tapply(stormData$FATALITIES, stormData$EVTYPE, sum), decr=T)
 evFatal <- evFatal[evFatal > 0]   # only the event types with any fatalities
-barplot(evFatal[1:10], main="Severe Event Fatalities")
+old.mar <- par(mar=c(5,9,4,2))
+barplot(evFatal[11-(1:10)], horiz=TRUE, mar=c(5,9,4,2), main="Severe Event Fatalities, 1950-2011", xlab="Fatalities", las=2)
+par(mar=old.mar)
 ```
 
 Tornadoes appear to be the most significant cause of death by a large margin,
-but the ambiguous naming may affect these results as "HEAT" appears twice in
+with 5,633 compared to Excessive Heat with 1,902  
+but the ambiguous naming may affect these results as "HEAT" and "WIND" both appear twice in
 the top ten.
 This also suggests that the 5,633 attributed to TORNADO may also be an understatement.
-We examine this possibility by 
+We examine this possibility by calculating the total fatalities across all similar
+event types, using function *HowMany()* as defined above.
 
-1. Define a function to 
-
-
+```{r FatalEvents}
+HowMany(evFatal, "TORN")
+HowMany(evFatal, "HEAT")
+HowMany(evFatal, "FLASH")
+HowMany(evFatal, "FLOOD")
+HowMany(evFatal, "LIGHTNING")
+HowMany(evFatal, "WIND")
 ```
+
+The 5,633 deaths attributed to "TORNADO" are not the complete story, but they are very close.
+The 1,903 deaths attributed to "EXCESSIVE HEAT", however, are only 60% of the 
+deaths attributable to heat related weather: 
+other classifications of extreme heat account for another 1,235 fatalities.
+Similarly, including fatalities attributed to other forms of flooding increases 
+the total from 987 to 1,035 for other classifications of flash floods, 
+or 1,525 for all types of flood.
+
+The "TSTM WIND" (assumed to mean thunderstorm wind) type as part of a broader 
+"WIND" category also shows a large variety of sub-types, with a total of 
+1,451 fatalities, putting the broad wind category ahead of lightning, 
+but we note that 25 of these are shared with tornadoes in the 
+"TORNADOES, TSTM WIND, HAIL" event type. 
+One could also question whether "Whirlwind" should be classified with tornadoes.
+
 ## Property and crop damage
+
+To measure the economic impact of severe weather we combine the total damage to
+property and crops for each event type as shown in the figure below.
+
+```{r PlotDamage}
+evDamage <- sort(tapply(stormData$Damage, stormData$EVTYPE, sum), decr=T) / 1e9
+evDamage <- evDamage[evDamage > 0]   # only the event types with any fatalities
+old.mar <- par(mar=c(5,11,4,2))
+barplot(evDamage[11-(1:10)], horiz=TRUE, mar=c(5,9,4,2), main="Severe Event Damage, 1950-2011", xlab="USD billions", las=2)
+par(mar=old.mar)
+```
+
+The positions of floods and tornadoes are reversed, with floods taking the top
+spot by a significant margin; including other flood types ("FLASH FLOOD" and 
+"RIVER FLOOD" are also in the top 10) increases from $150 billion to $179.9 billion
+for all types of flooding. This is over three times the $59 billion in damages
+attributed to tornadoes, the leading killer. Hurricanes and typhoons replace 
+heat in second spot with $90.9 billion in damages, slightly over half the total
+flood damage.
+Although storm surges are associated with hurricanes, we retain the separate
+classification here; combining them would remain second place behind all 
+floods.
+
+```{r DamageTotal}
+HowMany(evDamage, "FLOOD")
+HowMany(evDamage, "(HURR)|(TYP)")
+HowMany(evDamage, "TORN")
+HowMany(evDamage, "SURGE")
+HowMany(evDamage, "HAIL")
+HowMany(evDamage, "WIND")
+HowMany(evDamage, "ICE")
+```
+
+Althogh no individual wind event type makes the top ten, considered together they 
+account for $19.7 billion of damage, 
+surpassing the $15 billion in drought damage and $9 billion in ice-related damage, 
+nearly matching the $20.7 billion from hail.
